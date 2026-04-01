@@ -1,13 +1,40 @@
 -- ~/.config/yazi/init.lua
-th.git = th.git or {}
-th.git.modified = ui.Style():fg("blue")
-th.git.deleted = ui.Style():fg("red"):bold()
--- ~/.config/yazi/init.lua
-th.git = th.git or {}
-th.git.modified_sign = "M"
-th.git.deleted_sign = "D"
+-- ⚠️ 必须放在 require("git"):setup() 之前！
 
+-- 初始化 Git 主题配置
+th = th or {}
+th.git = th.git or {}
+
+-- 📌 自定义 Git 状态符号 (Signs)
+th.git.added_sign = "✚" -- 新增文件
+th.git.modified_sign = "●" -- 修改文件
+th.git.deleted_sign = "✘" -- 删除文件
+th.git.untracked_sign = "⁇" -- 未跟踪文件
+th.git.ignored_sign = "◌" -- 忽略文件
+th.git.updated_sign = "⟳" -- 已更新文件（合并/拉取）
+
+-- 🎨 自定义 Git 状态样式 (Colors + Effects)
+th.git.added = ui.Style():fg("green"):bold() -- 绿色加粗
+th.git.modified = ui.Style():fg("yellow"):bold() -- 黄色加粗
+th.git.deleted = ui.Style():fg("red"):bold() -- 红色加粗
+th.git.untracked = ui.Style():fg("blue"):italic() -- 蓝色斜体
+th.git.ignored = ui.Style():fg("dark-gray"):dim() -- 暗灰淡化
+th.git.updated = ui.Style():fg("magenta"):bold() -- 品红加粗
 require("git"):setup()
+Status:children_add(function()
+	local h = cx.active.current.hovered
+	if h == nil or ya.target_family() ~= "unix" then
+		return ui.Line({})
+	end
+
+	return ui.Line({
+		ui.Span(ya.user_name(h.cha.uid) or tostring(h.cha.uid)):fg("magenta"),
+		ui.Span(":"),
+		ui.Span(ya.group_name(h.cha.gid) or tostring(h.cha.gid)):fg("magenta"),
+		ui.Span(" "),
+	})
+end, 500, Status.RIGHT)
+
 require("starship"):setup({
 	-- Hide flags (such as filter, find and search). This can be beneficial for starship themes
 	-- which are intended to go across the entire width of the terminal.
@@ -24,4 +51,28 @@ require("starship"):setup({
 	-- Separator to place between the right prompt and the count widget. Use `count_separator = ""`
 	-- to have no space between the widgets.
 	count_separator = " ",
+})
+
+require("yaziline"):setup({
+	color = "#98c379", -- main theme color
+	secondary_color = "#5A6078", -- secondary color
+	default_files_color = "darkgray", -- color of the file counter when it's inactive
+	selected_files_color = "white",
+	yanked_files_color = "green",
+	cut_files_color = "red",
+
+	separator_style = "angly", -- "angly" | "curvy" | "liney" | "empty"
+	separator_open = "",
+	separator_close = "",
+	separator_open_thin = "",
+	separator_close_thin = "",
+	separator_head = "",
+	separator_tail = "",
+
+	select_symbol = "",
+	yank_symbol = "󰆐",
+
+	filename_max_length = 24, -- truncate when filename > 24
+	filename_truncate_length = 6, -- leave 6 chars on both sides
+	filename_truncate_separator = "...", -- the separator of the truncated filename
 })
