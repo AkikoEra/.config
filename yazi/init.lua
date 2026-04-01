@@ -1,25 +1,30 @@
 -- ~/.config/yazi/init.lua
--- ⚠️ 必须放在 require("git"):setup() 之前！
+-- ⚠️ 以下配置必须严格放在 require("git"):setup() 之前！
 
--- 初始化 Git 主题配置
+-- 初始化 Git 主题配置（避免覆盖已有配置）
 th = th or {}
 th.git = th.git or {}
 
--- 📌 自定义 Git 状态符号 (Signs)
-th.git.added_sign = "✚" -- 新增文件
-th.git.modified_sign = "●" -- 修改文件
-th.git.deleted_sign = "✘" -- 删除文件
-th.git.untracked_sign = "⁇" -- 未跟踪文件
-th.git.ignored_sign = "◌" -- 忽略文件
-th.git.updated_sign = "⟳" -- 已更新文件（合并/拉取）
+-- ===================================================================
+-- 🔤 自定义 Git 状态符号（严格使用对钩 ✓ / 叉 ✗ 等简单符号）
+-- ===================================================================
+th.git.added_sign = "✓" -- 新增文件：对钩（绿色）
+th.git.modified_sign = "~" -- 修改文件：波浪线（黄色）
+th.git.deleted_sign = "✗" -- 删除文件：叉（红色）
+th.git.untracked_sign = "?" -- 未跟踪：问号（蓝色）
+th.git.ignored_sign = "!" -- 忽略文件：感叹号（灰色）
+th.git.updated_sign = "U" -- 已更新：U（青色）
 
--- 🎨 自定义 Git 状态样式 (Colors + Effects)
-th.git.added = ui.Style():fg("green"):bold() -- 绿色加粗
-th.git.modified = ui.Style():fg("yellow"):bold() -- 黄色加粗
-th.git.deleted = ui.Style():fg("red"):bold() -- 红色加粗
-th.git.untracked = ui.Style():fg("blue"):italic() -- 蓝色斜体
-th.git.ignored = ui.Style():fg("dark-gray"):dim() -- 暗灰淡化
-th.git.updated = ui.Style():fg("magenta"):bold() -- 品红加粗
+-- ===================================================================
+-- 🎨 自定义 Git 状态样式（严格对应符号，无简化）
+-- ===================================================================
+th.git.added = ui.Style():fg("green"):bold() -- ✓ 绿色加粗
+th.git.modified = ui.Style():fg("yellow"):bold() -- ~ 黄色加粗
+th.git.deleted = ui.Style():fg("red"):bold() -- ✗ 红色加粗
+th.git.untracked = ui.Style():fg("blue"):italic() -- ? 蓝色斜体
+th.git.ignored = ui.Style():fg("dark-gray"):dim() -- ! 暗灰淡化
+th.git.updated = ui.Style():fg("cyan"):bold() -- U 青色加粗
+
 require("git"):setup()
 Status:children_add(function()
 	local h = cx.active.current.hovered
