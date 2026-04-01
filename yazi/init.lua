@@ -26,19 +26,6 @@ th.git.ignored = ui.Style():fg("dark-gray"):dim() -- ! 暗灰淡化
 th.git.updated = ui.Style():fg("cyan"):bold() -- U 青色加粗
 
 require("git"):setup()
-Status:children_add(function()
-	local h = cx.active.current.hovered
-	if h == nil or ya.target_family() ~= "unix" then
-		return ui.Line({})
-	end
-
-	return ui.Line({
-		ui.Span(ya.user_name(h.cha.uid) or tostring(h.cha.uid)):fg("magenta"),
-		ui.Span(":"),
-		ui.Span(ya.group_name(h.cha.gid) or tostring(h.cha.gid)):fg("magenta"),
-		ui.Span(" "),
-	})
-end, 500, Status.RIGHT)
 
 require("starship"):setup({
 	-- Hide flags (such as filter, find and search). This can be beneficial for starship themes
