@@ -68,40 +68,6 @@ require("yaziline"):setup({
 	filename_truncate_length = 6, -- leave 6 chars on both sides
 	filename_truncate_separator = "...", -- the separator of the truncated filename
 })
-
--- You can configure your bookmarks by lua language
--- 注释：说明可以通过 Lua 语言配置书签
-local bookmarks = {}
-
-local home_path = ya.target_family() == "windows" and os.getenv("USERPROFILE") or os.getenv("HOME")
--- 获取用户主目录路径
--- ya.target_family() 判断操作系统类型
--- Windows: USERPROFILE 环境变量；其他: HOME 环境变量
-
-local home_path = ya.target_family() == "windows" and os.getenv("USERPROFILE") or os.getenv("HOME")
--- 获取用户主目录路径
--- ya.target_family() 判断操作系统类型
--- Windows: USERPROFILE 环境变量；其他: HOME 环境变量
-
-table.insert(bookmarks, {
-	tag = "Desktop",
-	path = home_path .. path_sep .. "Desktop" .. path_sep,
-	key = "d",
-})
--- 添加通用的 Desktop 书签
--- 使用动态路径分隔符拼接路径
--- 小写 d 键作为快捷键
-
 require("yamb"):setup({
-	-- Optional, the path ending with path seperator represents folder.
-	bookmarks = bookmarks,
-	-- Optional, recieve notification everytime you jump.
-	jump_notify = true,
-	-- Optional, the cli of fzf.
 	cli = "fzf",
-	-- Optional, a string used for randomly generating keys, where the preceding characters have higher priority.
-	keys = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-	-- Optional, the path of bookmarks
-	path = (ya.target_family() == "windows" and os.getenv("APPDATA") .. "\\yazi\\config\\bookmark")
-		or (os.getenv("HOME") .. "/.config/yazi/bookmark"),
 })
