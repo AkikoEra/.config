@@ -1,0 +1,218 @@
+local T = {}
+
+function T.run_in_native_terminal(config, is_windows, cmd, opts)
+  opts = opts or {}
+  local focus = (opts.focus ~= false)
+  local prev = vim.api.nvim_get_current_win()
+  local prev_mode = (vim.api.nvim_get_mode and vim.api.nvim_get_mode().mode) or 'n'
+  if config.terminal.open then
+    vim.cmd 'botright split | terminal'
+    vim.cmd(string.format('resize %d', config.terminal.height or 12))
+  else
+    vim.cmd 'terminal'
+  end
+  local chan = vim.b.terminal_job_id
+  if not chan then
+    return false
+  end
+  if not focus then
+    pcall(vim.api.nvim_set_current_win, prev)
+    if prev_mode:sub(1, 1) == 'n' then
+      pcall(vim.cmd, 'stopinsert')
+    end
+  end
+  vim.defer_fn(function()
+    vim.fn.chansend(chan, cmd .. (is_windows() and '\r' or '\n'))
+  end, 100)
+  return true
+end
+
+function T.run_in_betterterm(config, is_windows, cmd, notify_warn, notify_err, opts)
+  local ok, betterTerm = pcall(require, 'betterTerm')
+  if not ok or config.betterterm.enabled == false then
+    return false
+  end
+  local cfg = config.betterterm or {}
+  local idx = cfg.index or 0
+  local delay = cfg.send_delay or 200
+  local focus = (cfg.focus_on_run ~= false)
+  local open_first = (cfg.open_if_closed ~= false)
+  opts = opts or {}
+  -- Respect both config focus_on_run and caller override. Only focus if BOTH allow focus.
+  local want_focus = (focus == true) and (opts.focus ~= false)
+  local prev = vim.api.nvim_get_current_win()
+  local prev_mode = (vim.api.nvim_get_mode and vim.api.nvim_get_mode().mode) or 'n'
+  -- Do not pre-open to avoid toggle-closing an already visible terminal window.
+  -- We will try to send first; if it fails, we may open; if focusing is desired, we'll try to focus an existing window.
+  vim.defer_fn(function()
+    local ok_send, err = pcall(betterTerm.send, cmd .. (is_windows() and '\r' or '\n'), idx)
+    if not ok_send then
+      notify_warn('Failed to send to betterTerm, using native terminal: ' .. tostring(err))
+      if not T.run_in_native_terminal(config, is_windows, cmd, { focus = want_focus }) then
+        notify_err 'Failed to open native terminal'
+      end
+      return
+    end
+    -- Focus behavior after successful send
+    if want_focus then
+      -- Prefer focusing an existing terminal window to avoid toggle-close behavior
+      local terms = T.list_open_builtin_terminals()
+      if terms and #terms > 0 then
+        local last = terms[#terms]
+        pcall(vim.api.nvim_set_current_win, prev) -- ensure we have valid window context
+        vim.defer_fn(function()
+          pcall(function()
+            -- try to focus existing terminal window displaying this buffer
+            for _, win in ipairs(vim.api.nvim_list_wins()) do
+              if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == last.bufnr then
+                pcall(vim.api.nvim_set_current_win, win)
+                return
+              end
+            end
+            -- not found: as a fallback, open via betterTerm (may create or bring to front)
+            pcall(betterTerm.open, idx)
+          end)
+        end, 60)
+      else
+        -- No terminal windows: open one now to show output
+        vim.defer_fn(function()
+          pcall(betterTerm.open, idx)
+        end, 60)
+      end
+    else
+      -- If not focusing, restore previous window to avoid stealing focus
+      vim.defer_fn(function()
+        pcall(vim.api.nvim_set_current_win, prev)
+        if prev_mode:sub(1, 1) == 'n' then
+          pcall(vim.cmd, 'stopinsert')
+        end
+      end, 10)
+    end
+  end, delay)
+  return true
+end
+
+function T.run_make_in_terminal(config, is_windows, cmdline, notify_warn, notify_err)
+  -- Decide focus policy:
+  -- - If betterTerm is enabled and focus_on_run ~= false, prefer focusing (honor user config).
+  -- - Otherwise fallback to legacy behavior: focus only when no builtin terminal is open.
+  local open_terms = T.list_open_builtin_terminals()
+  local bt_cfg = config.betterterm or {}
+  local prefer_bt = (bt_cfg.enabled ~= false)
+  local cfg_focus = (bt_cfg.focus_on_run ~= false)
+  local want_focus = (prefer_bt and cfg_focus) or (#open_terms == 0)
+  if not T.run_in_betterterm(config, is_windows, cmdline, notify_warn, notify_err, { focus = want_focus }) then
+    if not T.run_in_native_terminal(config, is_windows, cmdline, { focus = want_focus }) then
+      notify_err 'Unable to run make: cannot open terminal'
+    end
+  end
+end
+
+-- List open builtin terminal buffers
+function T.list_open_builtin_terminals()
+  local bufs = vim.api.nvim_list_bufs()
+  local items = {}
+  for _, b in ipairs(bufs) do
+    local ok_bt, bt = pcall(vim.api.nvim_buf_get_option, b, 'buftype')
+    if ok_bt and bt == 'terminal' then
+      local ok_job, job = pcall(vim.api.nvim_buf_get_var, b, 'terminal_job_id')
+      if ok_job and job and job > 0 then
+        local name = vim.api.nvim_buf_get_name(b)
+        table.insert(items, { bufnr = b, job = job, name = name })
+      end
+    end
+  end
+  return items
+end
+
+-- Send command to a specific builtin terminal job
+local function open_builtin_terminal_window(config, bufnr)
+  -- Try to focus existing window showing the buffer; otherwise open a split and show it
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == bufnr then
+      pcall(vim.api.nvim_set_current_win, win)
+      return true
+    end
+  end
+  local height = (config.terminal and config.terminal.height) or 12
+  vim.cmd 'botright split'
+  vim.cmd(string.format('resize %d', height))
+  pcall(vim.api.nvim_win_set_buf, 0, bufnr)
+  return true
+end
+
+function T.send_to_builtin_terminal(is_windows, job, cmd, opts)
+  opts = opts or {}
+  local nl = is_windows() and '\r' or '\n'
+  return pcall(vim.fn.chansend, job, cmd .. nl)
+end
+
+-- Select an open terminal (builtin) to send, or fallback to default run
+function T.select_or_run_in_terminal(config, is_windows, cmdline, notify_warn, notify_err)
+  local mode = ((config.make or {}).telescope or {}).choose_terminal or 'auto'
+  local open_terms = T.list_open_builtin_terminals()
+  local ok_t = pcall(require, 'telescope')
+  -- Only open picker when explicitly requested (always) or when there are 2+ terminals.
+  -- In auto mode with 0 or 1 terminals, run default strategy directly to avoid key leakage.
+  if mode == 'never' or not ok_t or (mode == 'auto' and #open_terms <= 1) then
+    return T.run_make_in_terminal(config, is_windows, cmdline, notify_warn, notify_err)
+  end
+  local pickers = require 'telescope.pickers'
+  local finders = require 'telescope.finders'
+  local conf = require('telescope.config').values
+  local entries = {}
+  local prog = (cmdline:match '^%S+' or 'cmd')
+  table.insert(entries, { display = string.format('[默认终端策略] → %s', prog), kind = 'default' })
+  for _, it in ipairs(open_terms) do
+    local disp = string.format('buf #%d | %s', it.bufnr, (it.name ~= '' and it.name or 'terminal'))
+    table.insert(entries, { display = disp, kind = 'builtin', job = it.job, bufnr = it.bufnr })
+  end
+  vim.defer_fn(function()
+    pickers
+      .new({}, {
+        prompt_title = 'quick-c: select terminal to send',
+        initial_mode = 'normal',
+        finder = finders.new_table {
+          results = entries,
+          entry_maker = function(e)
+            return { value = e, display = e.display, ordinal = e.display }
+          end,
+        },
+        sorter = conf.generic_sorter {},
+        attach_mappings = function(_, map)
+          local actions = require 'telescope.actions'
+          local action_state = require 'telescope.actions.state'
+          local function swallow_A()
+            return true
+          end
+          local function choose(bufnr)
+            local entry = action_state.get_selected_entry()
+            actions.close(bufnr)
+            local v = entry.value
+            if v.kind == 'default' then
+              -- Use unified focusing/selection policy inside run_make_in_terminal
+              T.run_make_in_terminal(config, is_windows, cmdline, notify_warn, notify_err)
+            else
+              local ok = T.send_to_builtin_terminal(is_windows, v.job, cmdline, { bufnr = v.bufnr, config = config })
+              if not ok then
+                notify_warn 'Failed to send to selected terminal, using default strategy'
+                T.run_make_in_terminal(config, is_windows, cmdline, notify_warn, notify_err)
+                return
+              end
+              vim.defer_fn(function()
+                pcall(open_builtin_terminal_window, config, v.bufnr)
+              end, 120)
+            end
+          end
+          map('i', '<CR>', choose)
+          map('n', '<CR>', choose)
+          map('n', 'A', swallow_A)
+          map('i', 'A', swallow_A)
+          return true
+        end,
+      })
+      :find()
+  end, 120)
+end
+
+return T
