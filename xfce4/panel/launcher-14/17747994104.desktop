@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=wechat
+Exec=/usr/bin/wechat %U
+StartupNotify=true
+Terminal=false
+Icon=/usr/share/icons/hicolor/256x256/apps/wechat.png
+Type=Application
+Categories=Utility;
+Comment=Wechat Desktop
+X-XFCE-Source=file:///usr/share/applications/wechat.desktop
